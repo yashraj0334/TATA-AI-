@@ -53,7 +53,12 @@ def _configure_poppler():
         p = Path(raw)
         if p.is_file():
             p = p.parent
-        if p.exists() and ((p / "pdftoppm.exe").exists() or (p / "pdfinfo.exe").exists()):
+        if p.exists() and (
+            (p / "pdftoppm.exe").exists()
+            or (p / "pdfinfo.exe").exists()
+            or (p / "pdftoppm").exists()
+            or (p / "pdfinfo").exists()
+        ):
             return str(p)
     return None
 
