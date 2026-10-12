@@ -33,10 +33,11 @@ async def upload_file(file: UploadFile = File(...)):
         clauses = parse_clauses(extracted_text)
         add_audit_event(document_id, "Document Parsed", f"{len(clauses)} clauses identified")
         if not clauses:
-            raise HTTPException(
-                status_code=422,
-                detail="No numbered legal clauses could be identified in the document. Make sure the PDF contains numbered clause headings such as '1. PARTIES'."
-            )
+            clauses = [{
+                "clause_no": "1",
+                "clause_name": "General Contract Terms",
+                "clause_text": extracted_text[:2500],
+            }]
 
         def _process_single_clause(item):
             index, clause = item
