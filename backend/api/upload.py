@@ -38,24 +38,35 @@ async def upload_file(file: UploadFile = File(...)):
                 detail="No numbered legal clauses could be identified in the document. Make sure the PDF contains numbered clause headings such as '1. PARTIES'."
             )
 
-        analyzed_clauses = []
-        for index, clause in enumerate(clauses, start=1):
+        def _process_single_clause(item):
+            index, clause = item
             clause_id = f"clause-{index}"
             clause_name = clause.get("clause_name", "")
             clause_text = clause.get("clause_text", "")
 
-            retrieved_knowledge = retrieve_relevant_knowledge(clause_text)
-            context = "\n\n".join(item.get("content", "") for item in retrieved_knowledge)
-            analysis = analyze_clause(clause_name, clause_text, context)
-            sources = [{"source": item.get("source"), "page": item.get("page")} for item in retrieved_knowledge]
+            try:
+                retrieved_knowledge = retrieve_relevant_knowledge(clause_text)
+                context = "\n\n".join(it.get("content", "") for it in retrieved_knowledge)
+                sources = [{"source": it.get("source"), "page": it.get("page")} for it in retrieved_knowledge]
+            except Exception:
+                context = ""
+                sources = []
 
-            analyzed_clauses.append({
+            analysis = analyze_clause(clause_name, clause_text, context)
+            return (index, {
                 **clause,
                 "clause_id": clause_id,
                 "analysis": analysis,
                 "sources": sources,
                 "human_review": get_review(document_id, clause_id),
             })
+
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            indexed_results = list(executor.map(_process_single_clause, enumerate(clauses, start=1)))
+
+        indexed_results.sort(key=lambda x: x[0])
+        analyzed_clauses = [r[1] for r in indexed_results]
 
         add_audit_event(document_id, "Clauses Extracted", f"{len(analyzed_clauses)} clauses extracted for review")
         add_audit_event(document_id, "Knowledge Retrieval Completed", "Clauses compared against organizational knowledge base")

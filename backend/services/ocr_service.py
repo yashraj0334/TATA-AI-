@@ -85,14 +85,36 @@ def extract_text_from_image(image_path: str) -> str:
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    # 1. Try fast native PDF text extraction first (instant for digital PDFs)
+    try:
+        import io
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+        extracted = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+        if len(extracted) > 50:
+            return extracted
+    except Exception:
+        pass
+
+    # 2. Scanned PDF fallback: Tesseract OCR (with optimized 150 DPI for fast performance)
     if not TESSERACT_PATH:
         raise RuntimeError(
             "Tesseract OCR is not available. Set TESSERACT_CMD in backend/.env or install Tesseract OCR."
         )
-    pages = convert_from_bytes(pdf_bytes, poppler_path=POPPLER_PATH, dpi=300)
+    pages = convert_from_bytes(pdf_bytes, poppler_path=POPPLER_PATH, dpi=150)
     return "\n".join(_ocr_image(page) for page in pages)
 
 
 def get_pdf_page_count(pdf_bytes: bytes) -> int:
-    info = pdfinfo_from_bytes(pdf_bytes, poppler_path=POPPLER_PATH)
-    return int(info.get("Pages", 0))
+    try:
+        import io
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+        return len(reader.pages)
+    except Exception:
+        pass
+    try:
+        info = pdfinfo_from_bytes(pdf_bytes, poppler_path=POPPLER_PATH)
+        return int(info.get("Pages", 0))
+    except Exception:
+        return 1
